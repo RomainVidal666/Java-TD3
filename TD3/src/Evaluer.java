@@ -1,9 +1,14 @@
-package esisar.java.td3;
 
 import java.util.Arrays;
+import java.util.InputMismatchException;
 import java.util.Scanner;
 import java.util.Vector;
 
+import esisar.java.td3.Constante;
+import esisar.java.td3.Expression;
+import esisar.java.td3.Variable;
+import esisar.java.td3.analyseurSyntaxique.AnalyseurSyntaxique;
+import esisar.java.td3.erreurs.SyntaxeInvalide;
 import esisar.java.td3.operationBinaire.Addition;
 import esisar.java.td3.operationBinaire.Division;
 import esisar.java.td3.operationBinaire.Multiplication;
@@ -23,30 +28,34 @@ public class Evaluer {
 	private static Vector<Variable> var;
 	private static Scanner scan;
 	
-	private static boolean terminer;
-	
 	/**
 	 * @param args La chaine correspondant a une expression arithmetique
 	 */
 	public static void main(String[] args) {
-		String s;
+		AnalyseurSyntaxique as = new AnalyseurSyntaxique();
+		
 		if (args.length < 2) {
 			System.out.println("Usage: Evaluer <Expression>");
+			return;
 		}
-		scan = new Scanner(System.in);
-		s = scan.nextLine();
-		System.out.println(s);
-		args = s.split(" ");
-		if (!Evaluer.analyseSyntaxique(args)){
-			System.out.println("Erreur syntaxique");
+		
+		for (int i = 0; i < args.length; i++) {
+			System.out.println(args[i]);
+		}
+		
+		try {
+			as.analyseSyntaxique(args);
+		} catch (SyntaxeInvalide e) {
+			System.out.println(e.getMessage());
 			return;
 		}
 		
 		Expression exp = Evaluer.stringToExpression(args);
 		System.out.println(exp);
 		
-		while(!terminer) {
-			Evaluer.demanderVariable();
+		scan = new Scanner(System.in);
+		
+		while(Evaluer.demanderVariable()) {
 			System.out.println("\tresultat: " + exp.valeur());
 		}
 	}
@@ -55,17 +64,14 @@ public class Evaluer {
 		Expression exp = null, exp1, exp2;
 		int min;
 		
-		// Supprime les parenthese inutile en debut et fin
+		// Supprime les parentheses inutile en debut et fin
 		args = supprimerParenteses(args);
-		
-		// Trouve l'operateur de plus faible priorite
-		// Donc a traiter en premier
 		
 		// Si c'est une variable ou une constante
 		if (args.length == 1) {
 			try {
 				//Constante
-				return new Constante(Integer.parseInt(args[0]));
+				return new Constante(Double.parseDouble(args[0]));
 			}
 			catch(NumberFormatException e) {
 				// Variable
@@ -75,6 +81,9 @@ public class Evaluer {
 		}
 		
 		// Si c'et une expression complexe
+		
+		// Trouve l'operateur de plus faible priorite
+		// Donc a traiter en premier
 		min = prioMin(args);
 		if (min == -1) return null;
 		// Unaire
@@ -134,6 +143,8 @@ public class Evaluer {
 	 */
 	private static String[] supprimerParenteses(String[] args) {
 		int parenthese = -1;
+		if ( !args[0].equals("(") )
+			return args;
 		for (int i = 0; i < args.length-1; i++) {
 			if (args[i].equals("(")) {
 				if (parenthese == -1)
@@ -169,7 +180,12 @@ public class Evaluer {
 		return nouvelleVariable;
 	}
 
-	//TODO NO_FOUND
+	/**
+	 * Donne l'operateur de priorite minimale
+	 * 
+	 * @param s l'expression a analyser
+	 * @return l'indice de l'operateur trouve
+	 */
 	private static int prioMin(String[] s) {
 		int priorite = 0;
 		int prioriteMin = 0;
@@ -178,17 +194,11 @@ public class Evaluer {
 			switch (s[i]) {
 			// Operateur binaire
 			case "+":
-				if ( prioriteMin >= 1 + priorite || prioriteMin == 0) 
-					{ min = i; prioriteMin = 1 + priorite; }
-				break;
 			case "-":
 				if ( prioriteMin >= 1 + priorite || prioriteMin == 0) 
 					{ min = i; prioriteMin = 1 + priorite; }
 				break;
 			case "*":
-				if ( prioriteMin >= 2 + priorite || prioriteMin == 0) 
-					{ min = i; prioriteMin = 2 + priorite; }
-				break;
 			case "/":
 				if ( prioriteMin >= 2 + priorite || prioriteMin == 0) 
 					{ min = i; prioriteMin = 2 + priorite; }
@@ -202,17 +212,8 @@ public class Evaluer {
 				break;
 			// Operateur unaire
 			case "cos":
-				if ( prioriteMin >= 3 + priorite || prioriteMin == 0) 
-					{ min = i; prioriteMin = 3 + priorite; }
-				break;
 			case "sin":
-				if ( prioriteMin >= 3 + priorite || prioriteMin == 0) 
-					{ min = i; prioriteMin = 3 + priorite; }
-				break;
 			case "log":
-				if ( prioriteMin >= 3 + priorite || prioriteMin == 0) 
-					{ min = i; prioriteMin = 3 + priorite; }
-				break;
 			case "exp":
 				if ( prioriteMin >= 3 + priorite || prioriteMin == 0) 
 					{ min = i; prioriteMin = 3 + priorite; }
@@ -224,61 +225,29 @@ public class Evaluer {
 		return min;
 	}
 	
-	private static void demanderVariable() {
-		int valeur;
+	/**
+	 * Demande toutes les variables presente dans l'expression.
+	 * 
+	 * @return vrai si les variables ont ete correctement renseigner
+	 */
+	private static boolean demanderVariable() {
+		double valeur;
 		if (var == null) {
-			terminer = true;
-			return;
+			return false;
 		}
 		for (Variable variable : var) {
 			System.out.println("Valeur de " + variable.getNom() + " ?");
-			valeur = scan.nextInt();
-			if (valeur == -1)
-				terminer = true;
-			variable.setValeur(valeur);
+			try {
+				valeur = scan.nextDouble();
+				if (valeur == -1) {
+				}
+				variable.setValeur(valeur);
+			} catch (InputMismatchException e) {
+				System.out.println("Valeur incorrecte.");
+				return false;
+			}
 		}
-	}
-	
-	private static boolean analyseSyntaxique(String s[]) {
-		String conc = Evaluer.concateLines(s, " ");
-		boolean isInvalid = false;
-		int parenthese = 0;
-		
-		// Verification du nombre de parenthese
-		for (int i = 0; i < conc.length(); i++) {
-			if (conc.charAt(i) == '(')
-				parenthese++;
-			if (conc.charAt(i) == ')')
-				parenthese--;
-		}
-		if (parenthese != 0)
-			return false;
-		
-		// Deux parenthese a la suite
-		isInvalid = isInvalid || conc.matches(".*\\( *\\).*");
-		// Deux nombre a la suite
-		isInvalid = isInvalid || conc.matches(".*([0-9]|[a-z]) ([0-9]|[a-z]).*");
-		// Deux operateur binaire a la suite
-		isInvalid = isInvalid || conc.matches(".*[*+-/] [*+-/].*");
-		// Operateur avant une parenthese fermante
-		isInvalid = isInvalid || conc.matches(".*([*+-/]|sin|cos|log|exp) \\).*");
-		// Operateur unaire suivi d'un operateur binaire
-		isInvalid = isInvalid || conc.matches(".*(sin|cos|log|exp) [*+-/].*");
-		// Nombre avant une parenthese ouvrante
-		isInvalid = isInvalid || conc.matches(".*[0-9] \\(.*");
-
-		return !isInvalid;
-	}
-	
-	public static String concateLines(String[] s, String separator) {
-		StringBuilder sb = new StringBuilder(s[0]);
-		if (s.length > 0) {
-	        for (int i = 1; i < s.length; i++) {
-	            sb.append(separator);
-	            sb.append(s[i]);
-	        }
-	    }
-		return sb.toString();
+		return true;
 	}
 
 }
